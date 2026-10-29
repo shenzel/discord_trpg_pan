@@ -1,0 +1,33 @@
+[package]
+name = "discord-auto-pan"
+version = "0.3.3"
+edition = "2021"
+default-run = "discord-auto-pan"
+
+[lib]
+name = "dpan"
+path = "src/lib.rs"
+
+[[bin]]
+name = "discord-auto-pan"
+path = "src/main.rs"
+
+[[bin]]
+name = "pan-probe"
+path = "src/bin/pan_probe.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+cc = "1"
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-single-instance = "2"
+tauri-plugin-log = "2"
+log = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+anyhow = "1"
+dotenvy = "0.15"

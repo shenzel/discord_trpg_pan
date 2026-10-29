@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Discord自動pan</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main id="app">
+      <div class="topbar">
+        <header class="status" id="status"></header>
+        <button class="icon-btn" id="mute-toggle" title="自分のミュート" aria-label="ミュート"></button>
+        <button class="icon-btn" id="settings-toggle" title="設定（マイク・スピーカー）" aria-label="設定"></button>
+        <button class="icon-btn" id="quit" title="アプリを終了する" aria-label="終了"></button>
+      </div>
+      <section class="notices" id="notices"></section>
+      <section class="settings" id="settings" hidden></section>
+      <nav class="phases" id="phases"></nav>
+      <section class="bar" id="bar">
+        <span class="bar-end left">L</span>
+        <div class="bar-inner" id="bar-inner">
+          <div class="track"></div>
+          <div class="center-ring" id="center-ring"><span class="ring-count" id="ring-count"></span></div>
+        </div>
+        <span class="bar-end right">R</span>
+        <p class="bar-note" id="bar-note"></p>
+      </section>
+      <section class="list" id="list"></section>
+      <footer class="footer">
+        <label class="gm-toggle"><input type="checkbox" id="gm-toggle" /><span>GM として卓を開く</span></label>
+        <button class="reset-link" id="reset">シナリオをリセット</button>
+      </footer>
+    </main>
+    <div class="popover" id="popover" hidden></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

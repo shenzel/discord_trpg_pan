@@ -1,0 +1,49 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "DiscordAutoPan",
+  "version": "0.3.3",
+  "identifier": "com.shenzel.discordautopan",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Discord自動pan",
+        "width": 380,
+        "height": 640,
+        "minWidth": 340,
+        "minHeight": 480,
+        "theme": "Dark"
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ],
+    "resources": {
+      "../../third_party/sdk-1.10.19337/discord_social_sdk/bin/release/discord_partner_sdk.dll": "discord_partner_sdk.dll",
+      "../../third_party/sdk-1.10.19337/discord_social_sdk/bin/release/discord_krisp.dll": "discord_krisp.dll",
+      "../../third_party/sdk-1.10.19337/discord_social_sdk/bin/release/krisp-bvc-o-pro-v3.kef": "krisp-bvc-o-pro-v3.kef",
+      "../../third_party/sdk-1.10.19337/discord_social_sdk/bin/release/krisp-nc-o-lite-v1.kef": "krisp-nc-o-lite-v1.kef",
+      "../../third_party/sdk-1.10.19337/discord_social_sdk/bin/release/krisp-nc-o-med-v7.kef": "krisp-nc-o-med-v7.kef",
+      "../../third_party/sdk-1.10.19337/discord_social_sdk/bin/release/krisp-nc-o-nb-v2.kef": "krisp-nc-o-nb-v2.kef",
+      "../../third_party/sdk-1.10.19337/discord_social_sdk/bin/release/krisp-vad-o-v2.kef": "krisp-vad-o-v2.kef"
+    }
+  }
+}
