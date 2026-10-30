@@ -55,6 +55,8 @@ client_id は、リポジトリ直下の `.env`（`DPAN_CLIENT_ID=...`、開発�
 ```powershell
 cd app/src-tauri; cargo test     # 単体テスト＋偽 Discord（名前付きパイプ）と偽ロビー通話での結合テスト
 cd app; npm run build            # 型チェック＋画面のビルド
+cd app; npm run test:ui          # 画面のゴールデン画像テスト（モックを撮って tests-ui/golden と比べる。Chrome を使う）
+cd app; npm run test:ui:update   # 画面を意図して変えたとき、基準画像を撮り直す
 ```
 
 ## 実機検証ツール

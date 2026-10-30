@@ -6,12 +6,15 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "test:ui": "playwright test",
+    "test:ui:update": "playwright test --update-snapshots"
   },
   "dependencies": {
     "@tauri-apps/api": "^2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.52.0",
     "@tauri-apps/cli": "^2",
     "typescript": "~5.8.3",
     "vite": "^6.3.5"

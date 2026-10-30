@@ -97,13 +97,16 @@ export function createMockApi(): Api {
     return dual ? { ...s, sub: subSnapshot() } : s;
   };
   const emit = () => listener(full());
-  setInterval(() => {
-    const g = people.find((p) => p.presence === "grace");
-    if (g && g.grace !== null && g.grace > 0) {
-      g.grace--;
-      emit();
-    }
-  }, 1000);
+  // ?still で猶予のカウントダウンを止める（ゴールデン画像の撮影用）
+  if (!new URLSearchParams(location.search).has("still")) {
+    setInterval(() => {
+      const g = people.find((p) => p.presence === "grace");
+      if (g && g.grace !== null && g.grace > 0) {
+        g.grace--;
+        emit();
+      }
+    }, 1000);
+  }
 
   // スクリーンショット確認用：?click=<CSSセレクタ> で読み込み後にクリックする（点を掴む操作のため pointerdown も送る）
   const click = new URLSearchParams(location.search).get("click");

@@ -8,3 +8,5 @@ target/
 third_party/
 probes/*/out/
 probes/*/dist/
+test-results/
+playwright-report/
