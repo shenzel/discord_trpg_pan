@@ -14,6 +14,7 @@ async function createTauriApi(): Promise<Api> {
     setGmMode: (on) => void invoke("set_gm_mode", { on }),
     relogin: (side) => void invoke("relogin", { side: side ?? "main" }),
     setGap: (gap) => void invoke("set_gap", { gap }),
+    setSpan: (lo, hi) => void invoke("set_span", { lo, hi }),
     addSubAccount: () => void invoke("add_sub_account"),
     removeSubAccount: () => void invoke("remove_sub_account"),
     quit: () => void invoke("quit_app"),

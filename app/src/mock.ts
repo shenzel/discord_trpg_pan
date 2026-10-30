@@ -12,6 +12,10 @@ export function createMockApi(): Api {
   ];
   let order = people.map((p) => p.id);
   let gmMode = false;
+  // ?span=-0.2,0.2 で L 端・R 端を指定して開く
+  let span = (new URLSearchParams(location.search).get("span")?.split(",").map(Number) ?? [-1, 1]) as [number, number];
+  // −1〜+1 の位置を L 端〜R 端の中へ
+  const fit = (p: number) => span[0] + ((p + 1) / 2) * (span[1] - span[0]);
   let dual = new URLSearchParams(location.search).has("dual");
   const readOnly = new URLSearchParams(location.search).has("pl");
   let listener: (s: Snapshot) => void = () => {};
@@ -30,6 +34,7 @@ export function createMockApi(): Api {
       side: "main",
       self_muted: false,
       gap: 0.2,
+      span,
       sub: null,
       audio: {
         inputs: [
@@ -77,16 +82,17 @@ export function createMockApi(): Api {
     seat_count: 1,
     members: [
       { id: "9", name: "わたし（サブ）", role: "gm", presence: "present", grace_secs: null, seat: null, position: null, in_lobby: true, speaking: false, is_self: true, muted: false },
-      { id: "7", name: "密談のひと", role: "pl", presence: "present", grace_secs: null, seat: 0, position: 0.6, in_lobby: true, speaking: true, is_self: false, muted: false },
+      { id: "7", name: "密談のひと", role: "pl", presence: "present", grace_secs: null, seat: 0, position: fit(0.6), in_lobby: true, speaking: true, is_self: false, muted: false },
     ],
   });
   const full = (): Snapshot => {
     const s = snapshot();
-    if (!dual) return s;
     // メインは左半分（−1〜−g）に寄せる
     const g = 0.2;
-    s.members = s.members.map((m) => (m.position === null ? m : { ...m, position: -1 + ((m.position + 1) / 2) * (1 - g) }));
-    return { ...s, sub: subSnapshot() };
+    s.members = s.members.map((m) =>
+      m.position === null ? m : { ...m, position: fit(dual ? -1 + ((m.position + 1) / 2) * (1 - g) : m.position) },
+    );
+    return dual ? { ...s, sub: subSnapshot() } : s;
   };
   const emit = () => listener(full());
   setInterval(() => {
@@ -97,9 +103,14 @@ export function createMockApi(): Api {
     }
   }, 1000);
 
-  // スクリーンショット確認用：?click=<CSSセレクタ> で読み込み後にクリックする
+  // スクリーンショット確認用：?click=<CSSセレクタ> で読み込み後にクリックする（点を掴む操作のため pointerdown も送る）
   const click = new URLSearchParams(location.search).get("click");
-  if (click) setTimeout(() => document.querySelector<HTMLElement>(click)?.click(), 1500);
+  if (click)
+    setTimeout(() => {
+      const el = document.querySelector<HTMLElement>(click);
+      el?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+      el?.click();
+    }, 1500);
 
   return {
     getState: async () => full(),
@@ -122,6 +133,10 @@ export function createMockApi(): Api {
     },
     relogin: () => {},
     setGap: () => {},
+    setSpan: (lo, hi) => {
+      span = [lo, hi];
+      emit();
+    },
     addSubAccount: () => {
       dual = true;
       emit();

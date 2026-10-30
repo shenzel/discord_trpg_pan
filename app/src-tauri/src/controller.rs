@@ -100,6 +100,8 @@ pub struct DualShared {
     pub self_ids: HashSet<String>,
     /// 2 分割のときの中央の隙間の半幅 g（メイン −1〜−g、サブ +g〜+1）
     pub gap: f64,
+    /// 席を並べる範囲の L 端と R 端（既定は −1〜+1）。聞く人の好みで狭める
+    pub span: (f64, f64),
     /// サブ垢が動いているか
     pub sub_active: bool,
 }
@@ -112,6 +114,7 @@ impl Default for DualShared {
             seated: [0, 0],
             self_ids: HashSet::new(),
             gap: DEFAULT_GAP,
+            span: DEFAULT_SPAN,
             sub_active: false,
         }
     }
@@ -120,9 +123,25 @@ impl Default for DualShared {
 pub type Dual = Arc<Mutex<DualShared>>;
 
 pub const DEFAULT_GAP: f64 = 0.2;
+pub const DEFAULT_SPAN: (f64, f64) = (-1.0, 1.0);
 
 fn default_gap() -> f64 {
     DEFAULT_GAP
+}
+
+fn default_span() -> (f64, f64) {
+    DEFAULT_SPAN
+}
+
+/// 席を並べる範囲。2 分割ならメイン −1〜−g・サブ +g〜+1、それを L 端〜R 端（span）の中に縮める。
+fn seat_range(split: bool, side: Side, gap: f64, span: (f64, f64)) -> (f64, f64) {
+    let (lo, hi) = match (split, side) {
+        (false, _) => (-1.0, 1.0),
+        (true, Side::Main) => (-1.0, -gap),
+        (true, Side::Sub) => (gap, 1.0),
+    };
+    let map = |p: f64| span.0 + (p + 1.0) / 2.0 * (span.1 - span.0);
+    (map(lo), map(hi))
 }
 
 /// Discord 側で 0 にしたものと、その元の値（ファイルに残す）。
@@ -144,6 +163,9 @@ pub struct AudioSettings {
     /// 2垢モードの隙間の半幅 g
     #[serde(default = "default_gap")]
     pub gap: f64,
+    /// 席を並べる範囲の L 端と R 端
+    #[serde(default = "default_span")]
+    pub span: (f64, f64),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -154,7 +176,7 @@ pub struct DeviceRef {
 
 impl Default for AudioSettings {
     fn default() -> Self {
-        Self { input_device: None, output_device: None, gap: DEFAULT_GAP }
+        Self { input_device: None, output_device: None, gap: DEFAULT_GAP, span: DEFAULT_SPAN }
     }
 }
 
@@ -273,6 +295,8 @@ pub struct Snapshot {
     pub self_muted: bool,
     /// 2垢モードの隙間の半幅 g
     pub gap: f64,
+    /// 席を並べる範囲の L 端と R 端
+    pub span: (f64, f64),
     /// 2垢モードのサブ側（画面に出すときにメイン側へ付ける）
     pub sub: Option<Box<Snapshot>>,
 }
@@ -295,6 +319,7 @@ impl Default for Snapshot {
             side: Side::Main,
             self_muted: false,
             gap: DEFAULT_GAP,
+            span: DEFAULT_SPAN,
             sub: None,
         }
     }
@@ -315,6 +340,8 @@ pub enum UiCommand {
     RefreshDevices,
     /// 2垢モードの隙間の半幅 g
     SetGap(f64),
+    /// 席を並べる範囲の L 端と R 端（L・R をドラッグ）
+    SetSpan(f64, f64),
     /// 自分の Discord のミュート（斜線のマイクアイコン）
     SetSelfMute(bool),
     /// GM が他の人にミュート／解除を指示する（相手のアプリが 1 回だけ従う）
@@ -1285,6 +1312,14 @@ impl Controller {
                 self.settings.save(&self.settings_path);
                 self.dual.lock().unwrap().gap = g;
             }
+            UiCommand::SetSpan(lo, hi) => {
+                // 最小幅は設けない（L と R が同じ位置なら全員が重なる）
+                let lo = lo.clamp(-1.0, 1.0);
+                let span = (lo, hi.clamp(lo, 1.0));
+                self.settings.span = span;
+                self.settings.save(&self.settings_path);
+                self.dual.lock().unwrap().span = span;
+            }
             UiCommand::SetGmMode(on) => {
                 if on != self.gm_mode {
                     self.gm_mode = on;
@@ -1330,6 +1365,7 @@ impl Controller {
         let mut d = dual.lock().unwrap();
         if self.side == Side::Main && self.seen_roles_rev == u64::MAX {
             d.gap = self.settings.gap;
+            d.span = self.settings.span;
         }
         let mut changed = false;
         // 他の側で変わった役職を取り込む（VC を移ってきた人の役職もここで引き継ぐ）
@@ -1350,14 +1386,8 @@ impl Controller {
         let mine = self.session.counted_seats().len();
         d.seated[self.side.index()] = mine;
         let other = d.seated[1 - self.side.index()];
-        let g = d.gap;
-        let (lo, hi) = if !d.sub_active || mine == 0 || other == 0 {
-            (-1.0, 1.0)
-        } else if self.side == Side::Main {
-            (-1.0, -g)
-        } else {
-            (g, 1.0)
-        };
+        let split = d.sub_active && mine > 0 && other > 0;
+        let (lo, hi) = seat_range(split, self.side, d.gap, d.span);
         drop(d);
         changed |= self.session.set_range(lo, hi);
         if changed {
@@ -1482,11 +1512,15 @@ impl Controller {
                 warnings.push("ミュート中です（ロビー通話もミュートしています）".to_string());
             }
         }
-        let gap = self.dual.lock().unwrap().gap;
+        let (gap, span) = {
+            let d = self.dual.lock().unwrap();
+            (d.gap, d.span)
+        };
         let snap = Snapshot {
             self_muted: self.discord_voice.as_ref().is_some_and(|d| d.mute),
             side: self.side,
             gap,
+            span,
             sub: None,
             status: self.status.clone(),
             voice: self.voice_status.clone(),
@@ -1560,5 +1594,18 @@ mod tests {
         assert_eq!(d.input_volume, 80.0);
         assert_eq!(d.output_id, "default");
         assert!(d.mute);
+    }
+
+    #[test]
+    fn seat_range_fits_into_span() {
+        let close = |a: (f64, f64), b: (f64, f64)| (a.0 - b.0).abs() < 1e-9 && (a.1 - b.1).abs() < 1e-9;
+        assert_eq!(seat_range(false, Side::Main, 0.2, DEFAULT_SPAN), (-1.0, 1.0));
+        // L と R は別々に動かせる
+        assert!(close(seat_range(false, Side::Sub, 0.2, (-0.4, 1.0)), (-0.4, 1.0)));
+        // 2 分割でも隙間ごと縮める（−0.5〜+0.5 の中で、メイン −0.5〜−0.1・サブ +0.1〜+0.5）
+        assert!(close(seat_range(true, Side::Main, 0.2, (-0.5, 0.5)), (-0.5, -0.1)));
+        assert!(close(seat_range(true, Side::Sub, 0.2, (-0.5, 0.5)), (0.1, 0.5)));
+        // 幅 0 なら全員が同じ位置
+        assert!(close(seat_range(true, Side::Sub, 0.2, (0.3, 0.3)), (0.3, 0.3)));
     }
 }

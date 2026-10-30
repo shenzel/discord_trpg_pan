@@ -20,6 +20,8 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 let api: Api;
 let state: Snapshot | null = null;
 let dragging: string | null = null;
+/** L・R の端をドラッグ中（並ぶ幅は手元の値を見せる） */
+let draggingEnd = false;
 
 // ---------- ポップオーバー ----------
 
@@ -336,6 +338,7 @@ function renderBar(s: Snapshot) {
       ? sides.flatMap(([x, side]) => x.members.filter((m) => m.position !== null).map((m) => ({ ...m, side, snap: x })))
       : [];
   $("bar").classList.toggle("dual", !!s.sub);
+  if (!draggingEnd) showSpan(s.span);
 
   for (const [id, dot] of dots) {
     if (!seated.some((m) => m.id === id)) {
@@ -366,6 +369,21 @@ function renderBar(s: Snapshot) {
     label.textContent = ellipsize(m.name, 5);
     dot.title = m.name;
   }
+  // 重なった点は名前も重なって読めないので、先頭の点に「N人」とまとめる（掴むと誰を動かすか選べる）
+  const px = (m: MemberView) => ((m.position! + 1) / 2) * inner.clientWidth;
+  const sorted = [...seated].sort((a, b) => a.position! - b.position!);
+  for (let i = 0; i < sorted.length; ) {
+    let j = i + 1;
+    while (j < sorted.length && px(sorted[j]) - px(sorted[j - 1]) < OVERLAP_PX) j++;
+    if (j - i > 1) {
+      sorted.slice(i, j).forEach((m, k) => {
+        const dot = dots.get(m.id)!;
+        dot.classList.toggle("below", false);
+        dot.querySelector<HTMLElement>(".dot-label")!.textContent = k === 0 ? `${j - i}人` : "";
+      });
+    }
+    i = j;
+  }
 
   const centered = live && s.phase !== "before"
     ? s.members.filter((m) => m.position === null && m.presence === "present" && !m.is_self)
@@ -375,8 +393,40 @@ function renderBar(s: Snapshot) {
   ring.title = centered.length ? `中央から鳴る人：${centered.map((m) => m.name).join("、")}` : "席なしで中央から鳴る人はいません";
 }
 
+/** 点を掴んだとき：重なった点なら誰を動かすか選ぶ。1 人ならそのまま並べ替える。 */
 function startDrag(e: PointerEvent) {
   const dot = e.currentTarget as HTMLElement;
+  // 名前を「N人」とまとめたのと同じく、間隔が OVERLAP_PX 未満で連なった点をひとかたまりにする
+  const sorted = [...dots.values()].sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+  const groups: HTMLElement[][] = [];
+  sorted.forEach((d, i) => {
+    const gap = i ? d.getBoundingClientRect().left - sorted[i - 1].getBoundingClientRect().left : Infinity;
+    if (gap < OVERLAP_PX) groups[groups.length - 1].push(d);
+    else groups.push([d]);
+  });
+  const overlapping = groups.find((g) => g.includes(dot))!;
+  if (overlapping.length < 2) return dragDot(dot, e);
+  const items = overlapping
+    .map((d) => `<button class="menu-item pick ${d.classList.contains("main-side") ? "main-side" : ""} ${d.classList.contains("sub-side") ? "sub-side" : ""}" data-pick="${escapeHtml(d.dataset.id!)}">
+        <span class="check"><span class="pick-mark"></span></span>${escapeHtml(ellipsize(d.title, 10))}</button>`)
+    .join("");
+  openPopover(dot, `<div class="menu">${items}<p class="menu-note pick-note">名前を掴んで左右へドラッグ</p></div>`, "below-center", () => {});
+}
+
+/** これより近い点は重なっているとみなす（点の直径くらい） */
+const OVERLAP_PX = 12;
+
+// 重なった点のメニューで名前を掴むと、その人の点をドラッグする
+popover.addEventListener("pointerdown", (e) => {
+  const item = (e.target as HTMLElement).closest<HTMLElement>("[data-pick]");
+  const dot = item && dots.get(item.dataset.pick!);
+  if (!dot) return;
+  e.preventDefault();
+  closePopover();
+  dragDot(dot, e);
+});
+
+function dragDot(dot: HTMLElement, e: PointerEvent) {
   const own = dot.dataset.side === "sub" ? state?.sub : state;
   if (!state || !own || own.seat_count < 2) return;
   const id = dot.dataset.id!;
@@ -386,8 +436,13 @@ function startDrag(e: PointerEvent) {
   dragging = id;
   dot.setPointerCapture(e.pointerId);
   dot.classList.add("dragging");
+  const x0 = e.clientX;
+  let moved = false;
   let frac = 0;
   const move = (ev: PointerEvent) => {
+    // 動かさずに離したときは並べ替えない（重なった点を選んだだけのとき）
+    moved ||= Math.abs(ev.clientX - x0) > 3;
+    if (!moved) return;
     const r = inner.getBoundingClientRect();
     frac = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
     dot.style.left = `${frac * 100}%`;
@@ -398,18 +453,70 @@ function startDrag(e: PointerEvent) {
     dot.removeEventListener("pointercancel", up);
     dot.classList.remove("dragging");
     dragging = null;
-    const p = frac * 2 - 1;
-    let index = 0;
-    seats.forEach((m, i) => {
-      if (Math.abs(m.position! - p) < Math.abs(seats[index].position! - p)) index = i;
-    });
-    api.reorder(id, index);
+    if (moved) {
+      const p = frac * 2 - 1;
+      let index = 0;
+      seats.forEach((m, i) => {
+        if (Math.abs(m.position! - p) < Math.abs(seats[index].position! - p)) index = i;
+      });
+      api.reorder(id, index);
+    }
     render();
   };
-  move(e);
   dot.addEventListener("pointermove", move);
   dot.addEventListener("pointerup", up);
   dot.addEventListener("pointercancel", up);
+}
+
+/** 席を並べる範囲の L 端と R 端（ドラッグ中は手元の値） */
+let span: [number, number] = [-1, 1];
+
+function setSpan(lo: number, hi: number) {
+  const round = (v: number) => Math.round(v * 20) / 20;
+  lo = Math.max(-1, Math.min(round(lo), span[1]));
+  hi = Math.max(lo, Math.min(round(hi), 1));
+  if (lo === span[0] && hi === span[1]) return;
+  showSpan([lo, hi]);
+  api.setSpan(lo, hi);
+}
+
+function showSpan(next: [number, number]) {
+  span = next;
+  const inner = $("bar-inner");
+  inner.style.setProperty("--lo", String(span[0]));
+  inner.style.setProperty("--hi", String(span[1]));
+}
+
+// L・R の端を内側へ寄せると、席の並ぶ範囲が縮む（人と人の間隔が狭まる）。L と R は別々に動く
+for (const end of document.querySelectorAll<HTMLElement>(".bar-end")) {
+  const isLeft = end.dataset.end === "left";
+  end.addEventListener("pointerdown", (e) => {
+    const inner = $("bar-inner");
+    draggingEnd = true;
+    end.setPointerCapture(e.pointerId);
+    end.classList.add("dragging");
+    // 掴んだ位置と端の席とのずれを保ったまま動かす
+    const r0 = inner.getBoundingClientRect();
+    const offset = e.clientX - (r0.left + ((span[isLeft ? 0 : 1] + 1) / 2) * r0.width);
+    const move = (ev: PointerEvent) => {
+      const r = inner.getBoundingClientRect();
+      const p = ((ev.clientX - offset - r.left) / r.width) * 2 - 1;
+      if (isLeft) setSpan(p, span[1]);
+      else setSpan(span[0], p);
+    };
+    const up = () => {
+      end.removeEventListener("pointermove", move);
+      end.removeEventListener("pointerup", up);
+      end.removeEventListener("pointercancel", up);
+      end.classList.remove("dragging");
+      draggingEnd = false;
+      render();
+    };
+    end.addEventListener("pointermove", move);
+    end.addEventListener("pointerup", up);
+    end.addEventListener("pointercancel", up);
+  });
+  end.addEventListener("dblclick", () => (isLeft ? setSpan(-1, span[1]) : setSpan(span[0], 1)));
 }
 
 function formatSecs(s: number) {

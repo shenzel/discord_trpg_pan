@@ -743,3 +743,25 @@ async fn missing_client_id_shows_setup() {
     let app = App::start_with(&common::unique_prefix(), "");
     wait_until("設定エラー", T, || app.snap().status == Status::Setup).await;
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn span_ends_move_independently() {
+    let discord = FakeDiscord::start("me", 0);
+    discord.add_channel("vc1", "卓1", &[("a", "A"), ("b", "B"), ("c", "C")]);
+    discord.select(Some("vc1"));
+    let app = App::start(&discord);
+    wait_connected(&app, 3).await;
+    app.send(UiCommand::SetPhase(Phase::During));
+    wait_gain(&app, "c", pos(1.0)).await;
+    // L だけ内側へ：右端の人はそのまま、残りが寄る
+    app.send(UiCommand::SetSpan(-0.2, 1.0));
+    wait_gain(&app, "a", pos(-0.2)).await;
+    wait_gain(&app, "b", pos(0.4)).await;
+    assert!(near(app.voice.gain("c").unwrap(), pos(1.0)));
+    // 最小幅はない：L と R が同じ位置なら全員重なる
+    app.send(UiCommand::SetSpan(0.5, 0.5));
+    for id in ["a", "b", "c"] {
+        wait_gain(&app, id, pos(0.5)).await;
+    }
+    assert_eq!(app.snap().span, (0.5, 0.5));
+}

@@ -161,22 +161,42 @@ button {
   border-radius: 8px;
 }
 .bar-end {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
   width: 14px;
+  padding: 6px 0;
   font-size: 11px;
   font-weight: 700;
   color: var(--faint);
   text-align: center;
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+}
+/* 端の席から 27px 外側（範囲いっぱいのときは元の L・R の位置） */
+.bar-end.left {
+  left: calc((var(--lo, -1) + 1) * 50% - 27px);
+  transform: translate(-50%, -50%);
+}
+.bar-end.right {
+  left: calc((var(--hi, 1) + 1) * 50% + 27px);
+  transform: translate(-50%, -50%);
+}
+.bar-end:hover,
+.bar-end.dragging {
+  color: var(--muted);
 }
 .bar-inner {
   position: relative;
   flex: 1;
   height: 100%;
-  margin: 0 14px;
+  margin: 0 34px;
 }
 .track {
   position: absolute;
-  left: 0;
-  right: 0;
+  left: calc((var(--lo, -1) + 1) * 50%);
+  right: calc((1 - var(--hi, 1)) * 50%);
   top: 50%;
   height: 2px;
   background: var(--deep);
@@ -395,6 +415,25 @@ button {
 .row-mute .icon {
   width: 15px;
   height: 15px;
+}
+.pick-mark {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--dot);
+}
+.pick.main-side .pick-mark {
+  background: var(--left-vc);
+}
+.pick.sub-side .pick-mark {
+  background: var(--right-vc);
+}
+.menu-item.pick {
+  cursor: grab;
+  touch-action: none;
+}
+.pick-note {
+  margin: 4px 8px 2px;
 }
 .menu-sep {
   height: 1px;

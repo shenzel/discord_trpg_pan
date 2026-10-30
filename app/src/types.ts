@@ -69,6 +69,8 @@ export interface Snapshot {
   self_muted: boolean;
   /** 2垢モードの隙間の半幅 g */
   gap: number;
+  /** 席を並べる範囲の L 端と R 端（既定は −1〜+1） */
+  span: [number, number];
   /** 2垢モードのサブ側 */
   sub: Snapshot | null;
 }
@@ -83,6 +85,7 @@ export interface Api {
   setGmMode(on: boolean): void;
   relogin(side?: "main" | "sub"): void;
   setGap(gap: number): void;
+  setSpan(lo: number, hi: number): void;
   addSubAccount(): void;
   removeSubAccount(): void;
   quit(): void;
