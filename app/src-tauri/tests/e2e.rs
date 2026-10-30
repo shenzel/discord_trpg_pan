@@ -745,6 +745,29 @@ async fn missing_client_id_shows_setup() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn per_member_volume_scales_gain() {
+    let discord = FakeDiscord::start("me", 0);
+    discord.add_channel("vc1", "卓1", &[("a", "A"), ("b", "B")]);
+    discord.select(Some("vc1"));
+    let app = App::start(&discord);
+    wait_connected(&app, 2).await;
+    app.send(UiCommand::SetPhase(Phase::During));
+    wait_gain(&app, "a", pos(-1.0)).await;
+    wait_gain(&app, "b", pos(1.0)).await;
+    // 移動が終わったあとでも、音量を変えればすぐ送り直す
+    app.send(UiCommand::SetVolume("a".into(), 0.5));
+    wait_gain(&app, "a", pos(-1.0).scaled(0.5)).await;
+    assert!(app.snap().members.iter().any(|m| m.id == "a" && m.volume == 0.5));
+    assert!(near(app.voice.gain("b").unwrap(), pos(1.0)), "ほかの人は変わらない");
+    // 並びが変わっても音量は保つ
+    app.send(UiCommand::Reorder("b".into(), 0));
+    wait_gain(&app, "a", pos(1.0).scaled(0.5)).await;
+    // 上限は 200%
+    app.send(UiCommand::SetVolume("b".into(), 3.0));
+    wait_gain(&app, "b", pos(-1.0).scaled(2.0)).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn span_ends_move_independently() {
     let discord = FakeDiscord::start("me", 0);
     discord.add_channel("vc1", "卓1", &[("a", "A"), ("b", "B"), ("c", "C")]);

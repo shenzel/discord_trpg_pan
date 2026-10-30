@@ -21,6 +21,11 @@ impl Pan {
     pub fn max_diff(self, other: Pan) -> f64 {
         (self.left - other.left).abs().max((self.right - other.right).abs())
     }
+
+    /// 人ごとの音量の倍率を掛ける（1 を超えてもよい。ミキサー側で音割れ前に止める）
+    pub fn scaled(self, volume: f64) -> Pan {
+        Pan { left: self.left * volume, right: self.right * volume }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

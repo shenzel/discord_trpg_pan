@@ -546,15 +546,15 @@ function rowHtml(m: MemberView, s: Snapshot) {
     badge = `<span class="badge muted" title="このアプリを使っていないので、Discord 経由で中央から聞こえます">アプリなし</span>`;
   }
   const name = escapeHtml(m.name);
-  const more = s.read_only
-    ? ""
-    : `<button class="more" data-menu="${escapeHtml(m.id)}" aria-label="役職を変更">${icons.dots}</button>`;
+  const more = `<button class="more" data-menu="${escapeHtml(m.id)}" aria-label="メニュー">${icons.dots}</button>`;
   const conn = connection(m, s);
   const mute = m.muted && m.presence === "present" ? `<span class="row-mute" title="ミュート中">${icons.micOff}</span>` : "";
+  const vol = m.volume !== 1 ? `<span class="row-vol" title="このアプリで聞く音量">${percent(m.volume)}</span>` : "";
   return `<li class="row ${m.presence !== "present" ? "absent" : ""} ${m.is_self ? "self-row" : ""}">
       <span class="conn ${conn.cls}" title="${conn.title}"></span>
       <span class="name ${m.speaking ? "speaking" : ""}" title="${name}">${escapeHtml(ellipsize(m.name, 8))}${m.is_self ? '<span class="you">（自分）</span>' : ""}</span>
       ${mute}
+      ${vol}
       ${badge}
       ${more}
     </li>`;
@@ -609,21 +609,51 @@ $("list").addEventListener("click", (e) => {
   const owner = state.sub?.members.some((x) => x.id === id) ? state.sub : state;
   const canMute = m.is_self || (owner.gm_mode && m.presence === "present");
   const muteItem = canMute
-    ? `<div class="menu-sep"></div><button class="menu-item" data-action="${m.muted ? "unmute" : "mute"}">
+    ? `<button class="menu-item" data-action="${m.muted ? "unmute" : "mute"}">
         <span class="check">${m.muted ? icons.mic : icons.micOff}</span>${m.muted ? "ミュートを解除" : "ミュートにする"}${
           m.is_self ? "" : '<span class="menu-note">（本人が解除できます）</span>'
         }</button>`
     : "";
-  const html = `<div class="menu">${ROLES.map(
-    (r) => `<button class="menu-item ${r.id === m.role ? "current" : ""}" data-action="${r.id}">
+  // 役職は GM の卓に参加中なら変えられない。音量は自分の耳だけなので誰でも変えられる
+  const roleItems = owner.read_only
+    ? ""
+    : ROLES.map(
+        (r) => `<button class="menu-item ${r.id === m.role ? "current" : ""}" data-action="${r.id}">
         <span class="check">${r.id === m.role ? icons.check : ""}</span>${r.label}</button>`,
-  ).join("")}${muteItem}</div>`;
+      ).join("");
+  const noApp = owner.voice.kind === "in_call" && !m.in_lobby && m.presence === "present";
+  const volumeItem = m.is_self
+    ? ""
+    : `<label class="menu-volume" title="ダブルクリックで 100% に戻す">
+        <span>音量<b id="volume-value">${percent(m.volume)}</b></span>
+        <input type="range" min="0" max="200" step="5" value="${Math.round(m.volume * 100)}" data-volume="${escapeHtml(id)}" />
+        ${noApp ? '<span class="menu-note">アプリなしの人は Discord の音量で聞こえます</span>' : ""}
+      </label>`;
+  const html = `<div class="menu">${[roleItems, volumeItem, muteItem].filter(Boolean).join('<div class="menu-sep"></div>')}</div>`;
   openPopover(btn, html, "below-right", (action) => {
     if (action === "mute" || action === "unmute") {
       if (m.is_self) api.setSelfMute(action === "mute");
       else api.requestMute(id, action === "mute");
     } else if (action !== m.role) api.setRole(id, action as Role);
   });
+});
+
+function percent(v: number) {
+  return `${Math.round(v * 100)}%`;
+}
+
+popover.addEventListener("input", (e) => {
+  const t = e.target as HTMLInputElement;
+  if (!t.dataset.volume) return;
+  $("volume-value").textContent = percent(Number(t.value) / 100);
+  api.setVolume(t.dataset.volume, Number(t.value) / 100);
+});
+popover.addEventListener("dblclick", (e) => {
+  const t = e.target as HTMLElement;
+  const input = t.closest(".menu-volume")?.querySelector<HTMLInputElement>("[data-volume]");
+  if (!input) return;
+  input.value = "100";
+  input.dispatchEvent(new Event("input", { bubbles: true }));
 });
 
 $("reset").addEventListener("click", (e) => {

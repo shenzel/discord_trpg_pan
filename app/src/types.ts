@@ -32,6 +32,8 @@ export interface MemberView {
   is_self: boolean;
   /** Discord でミュート中 */
   muted: boolean;
+  /** このアプリで聞く音量の倍率（1 で 100%） */
+  volume: number;
 }
 
 export interface Device {
@@ -86,6 +88,7 @@ export interface Api {
   relogin(side?: "main" | "sub"): void;
   setGap(gap: number): void;
   setSpan(lo: number, hi: number): void;
+  setVolume(userId: string, volume: number): void;
   addSubAccount(): void;
   removeSubAccount(): void;
   quit(): void;

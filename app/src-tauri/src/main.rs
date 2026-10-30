@@ -140,6 +140,11 @@ fn set_gap(gap: f64, state: State<'_, AppState>) {
 }
 
 #[tauri::command]
+fn set_volume(user_id: String, volume: f64, state: State<'_, AppState>) {
+    state.broadcast(UiCommand::SetVolume(user_id, volume));
+}
+
+#[tauri::command]
 fn set_span(lo: f64, hi: f64, state: State<'_, AppState>) {
     state.broadcast(UiCommand::SetSpan(lo, hi));
 }
@@ -349,6 +354,7 @@ fn main() {
             refresh_devices,
             set_gap,
             set_span,
+            set_volume,
             set_self_mute,
             request_mute,
             add_sub_account,

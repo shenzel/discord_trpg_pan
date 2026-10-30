@@ -416,6 +416,29 @@ button {
   width: 15px;
   height: 15px;
 }
+.row-vol {
+  font-size: 10px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.menu-volume {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 160px;
+  padding: 6px 8px;
+  font-size: 13px;
+}
+.menu-volume b {
+  margin-left: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.menu-volume input[type="range"] {
+  width: 100%;
+}
+.menu-volume .menu-note {
+  margin-left: 0;
+}
 .pick-mark {
   width: 10px;
   height: 10px;

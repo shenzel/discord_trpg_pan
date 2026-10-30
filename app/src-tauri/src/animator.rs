@@ -66,6 +66,11 @@ impl Animator {
         }
     }
 
+    /// 最後に送った pan（音量だけ変えたときに送り直す）
+    pub fn last_sent(&self, id: &str) -> Option<Pan> {
+        self.tracks.get(id)?.last_sent
+    }
+
     pub fn retain(&mut self, keep: impl Fn(&str) -> bool) {
         self.tracks.retain(|id, _| keep(id));
     }

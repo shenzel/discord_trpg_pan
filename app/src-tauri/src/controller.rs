@@ -124,6 +124,8 @@ pub type Dual = Arc<Mutex<DualShared>>;
 
 pub const DEFAULT_GAP: f64 = 0.2;
 pub const DEFAULT_SPAN: (f64, f64) = (-1.0, 1.0);
+/// 人ごとの音量の上限（200%）
+pub const MAX_VOLUME: f64 = 2.0;
 
 fn default_gap() -> f64 {
     DEFAULT_GAP
@@ -166,6 +168,9 @@ pub struct AudioSettings {
     /// 席を並べる範囲の L 端と R 端
     #[serde(default = "default_span")]
     pub span: (f64, f64),
+    /// 人ごとの音量の倍率（user_id → 0〜2）。1 の人は持たない
+    #[serde(default)]
+    pub volumes: HashMap<String, f64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -176,7 +181,7 @@ pub struct DeviceRef {
 
 impl Default for AudioSettings {
     fn default() -> Self {
-        Self { input_device: None, output_device: None, gap: DEFAULT_GAP, span: DEFAULT_SPAN }
+        Self { input_device: None, output_device: None, gap: DEFAULT_GAP, span: DEFAULT_SPAN, volumes: HashMap::new() }
     }
 }
 
@@ -254,6 +259,8 @@ pub struct MemberView {
     pub is_self: bool,
     /// Discord でミュート中か
     pub muted: bool,
+    /// このアプリで聞く音量の倍率（1 で 100%）
+    pub volume: f64,
 }
 
 /// 設定画面に出すマイクとスピーカー。
@@ -342,6 +349,8 @@ pub enum UiCommand {
     SetGap(f64),
     /// 席を並べる範囲の L 端と R 端（L・R をドラッグ）
     SetSpan(f64, f64),
+    /// 人ごとの音量の倍率（1 で 100%）
+    SetVolume(String, f64),
     /// 自分の Discord のミュート（斜線のマイクアイコン）
     SetSelfMute(bool),
     /// GM が他の人にミュート／解除を指示する（相手のアプリが 1 回だけ従う）
@@ -1320,6 +1329,21 @@ impl Controller {
                 self.settings.save(&self.settings_path);
                 self.dual.lock().unwrap().span = span;
             }
+            UiCommand::SetVolume(id, v) => {
+                let v = (v.clamp(0.0, MAX_VOLUME) * 20.0).round() / 20.0;
+                if v == 1.0 {
+                    self.settings.volumes.remove(&id);
+                } else {
+                    self.settings.volumes.insert(id.clone(), v);
+                }
+                self.settings.save(&self.settings_path);
+                // 移動が終わっていると animator は送り直さないので、ここで送る
+                if let Some(pan) = self.animator.last_sent(&id) {
+                    self.voice.set_gain(&id, pan.scaled(v));
+                }
+                self.dirty = true;
+                return;
+            }
             UiCommand::SetGmMode(on) => {
                 if on != self.gm_mode {
                     self.gm_mode = on;
@@ -1411,8 +1435,12 @@ impl Controller {
             self.voice.set_metadata(&meta);
         }
         for (id, pan) in self.animator.tick(now) {
-            self.voice.set_gain(&id, pan);
+            self.voice.set_gain(&id, pan.scaled(self.volume_of(&id)));
         }
+    }
+
+    fn volume_of(&self, id: &str) -> f64 {
+        self.settings.volumes.get(id).copied().unwrap_or(1.0)
     }
 
     fn sync_targets(&mut self, now: Instant) {
@@ -1469,6 +1497,7 @@ impl Controller {
                     speaking: self.speaking.contains(&m.id),
                     is_self: false,
                     muted: self.muted.get(&m.id).copied().unwrap_or(false),
+                    volume: self.volume_of(&m.id),
                 }
             })
             .collect::<Vec<_>>();
@@ -1488,6 +1517,7 @@ impl Controller {
                     speaking: self.voice_user.as_ref().is_some_and(|u| self.speaking.contains(u)),
                     is_self: true,
                     muted: self.discord_voice.as_ref().is_some_and(|d| d.mute),
+                    volume: 1.0,
                 },
             );
         }

@@ -16,6 +16,7 @@ export function createMockApi(): Api {
   let span = (new URLSearchParams(location.search).get("span")?.split(",").map(Number) ?? [-1, 1]) as [number, number];
   // −1〜+1 の位置を L 端〜R 端の中へ
   const fit = (p: number) => span[0] + ((p + 1) / 2) * (span[1] - span[0]);
+  const volumes = new Map<string, number>();
   let dual = new URLSearchParams(location.search).has("dual");
   const readOnly = new URLSearchParams(location.search).has("pl");
   let listener: (s: Snapshot) => void = () => {};
@@ -54,7 +55,7 @@ export function createMockApi(): Api {
       phase,
       seat_count: n,
       members: [
-        { id: "0", name: "わたし", role: gmMode ? "gm" : "pl", presence: "present", grace_secs: null, seat: null, position: null, in_lobby: true, speaking: false, is_self: true, muted: false } as MemberView,
+        { id: "0", name: "わたし", role: gmMode ? "gm" : "pl", presence: "present", grace_secs: null, seat: null, position: null, in_lobby: true, speaking: false, is_self: true, muted: false, volume: 1 } as MemberView,
       ].concat(people.map((p) => {
         const seat = seats.indexOf(p.id);
         return {
@@ -68,6 +69,7 @@ export function createMockApi(): Api {
           speaking: p.id === "1",
           is_self: false,
           muted: p.id === "2",
+          volume: volumes.get(p.id) ?? 1,
           position: seat < 0 ? null : n === 1 ? 0 : -1 + (2 * seat) / (n - 1),
         };
       })),
@@ -81,8 +83,8 @@ export function createMockApi(): Api {
     sub: null,
     seat_count: 1,
     members: [
-      { id: "9", name: "わたし（サブ）", role: "gm", presence: "present", grace_secs: null, seat: null, position: null, in_lobby: true, speaking: false, is_self: true, muted: false },
-      { id: "7", name: "密談のひと", role: "pl", presence: "present", grace_secs: null, seat: 0, position: fit(0.6), in_lobby: true, speaking: true, is_self: false, muted: false },
+      { id: "9", name: "わたし（サブ）", role: "gm", presence: "present", grace_secs: null, seat: null, position: null, in_lobby: true, speaking: false, is_self: true, muted: false, volume: 1 },
+      { id: "7", name: "密談のひと", role: "pl", presence: "present", grace_secs: null, seat: 0, position: fit(0.6), in_lobby: true, speaking: true, is_self: false, muted: false, volume: volumes.get("7") ?? 1 },
     ],
   });
   const full = (): Snapshot => {
@@ -133,6 +135,10 @@ export function createMockApi(): Api {
     },
     relogin: () => {},
     setGap: () => {},
+    setVolume: (id, v) => {
+      volumes.set(id, Math.round(Math.max(0, Math.min(2, v)) * 20) / 20);
+      emit();
+    },
     setSpan: (lo, hi) => {
       span = [lo, hi];
       emit();
